@@ -1,0 +1,50 @@
+version: '3.9'
+services:
+  api01: &api
+    image:
+      context: .
+      filename: Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      API_PORT: 3000
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 100MB
+
+  api02: 
+    <<*api
+
+  nginx:
+    image: 'docker.io/nginx:latest'
+    volumes:
+      - './conf/nginx:/etc/nginx/'
+    depends_on:
+      - api01
+      - api02
+    ports:
+      - '9999:80'
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 150MB
+
+  postgres:
+    image: 'docker.io/postgres:16'
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    volumes:
+      - './conf/postgresql/postgresql.conf:/etc/postgresql/postgresql.conf:ro'
+      - './conf/postgersql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro'
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 200MB
+
+networks:
+  default:
+    driver: bridge
+    name: network

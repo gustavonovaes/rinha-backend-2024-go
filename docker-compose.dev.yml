@@ -1,0 +1,15 @@
+version: '3.9'
+
+services:
+  api:
+    image: docker.io/golang:1.22
+    volumes:
+      - .:/app
+      - .go/cache:/go/cache
+    working_dir: /app
+    environment:
+      GOCACHE: /go/cache
+      API_PORT: 5000
+    port: 
+      - 5000:5000
+    command: "go run ."
