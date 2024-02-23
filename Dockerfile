@@ -12,5 +12,5 @@ FROM scratch as runtime
 WORKDIR /app
 COPY --from=builder /app/api .
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-EXPOSE 
+EXPOSE 5000
 CMD ["./api"]

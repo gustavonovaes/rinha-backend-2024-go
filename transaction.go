@@ -1,4 +1,4 @@
-package rinhabackend202401
+package main
 
 import "time"
 

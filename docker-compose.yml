@@ -1,13 +1,17 @@
-version: '3.9'
+version: '3'
+
 services:
   api01: &api
-    image:
+    build:
       context: .
-      filename: Dockerfile
-    ports:
-      - '3000:3000'
+      dockerfile: Dockerfile
+    # image: gustavonovaes/rinha-backend-2024-go:latest
     environment:
       API_PORT: 3000
+      DATABASE_URL: "postgres://rinha:rinha@postgres:5432/rinha?sslmode=disable"
+    restart: unless-stopped
+    networks:
+      - default
     deploy:
       resources:
         limits:
@@ -15,34 +19,43 @@ services:
           memory: 100MB
 
   api02: 
-    <<*api
+    <<: *api
 
   nginx:
-    image: 'docker.io/nginx:latest'
+    image: docker.io/nginx:1.25
     volumes:
-      - './conf/nginx:/etc/nginx/'
+      - ./conf/nginx:/etc/nginx/
     depends_on:
       - api01
       - api02
+    networks:
+      - default
     ports:
-      - '9999:80'
+      - 9999:80
+    restart: unless-stopped
     deploy:
       resources:
         limits:
           cpus: '0.50'
-          memory: 150MB
+          memory: 100MB
 
   postgres:
-    image: 'docker.io/postgres:16'
+    image: docker.io/postgres:16
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
     volumes:
-      - './conf/postgresql/postgresql.conf:/etc/postgresql/postgresql.conf:ro'
-      - './conf/postgersql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro'
+      - ./conf/postgresql/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./conf/postgresql/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_DB: "rinha"
+      POSTGRES_USER: "rinha"
+      POSTGRES_PASSWORD: "rinha"
     deploy:
       resources:
         limits:
           cpus: '0.50'
-          memory: 200MB
+          memory: 250MB
 
 networks:
   default:

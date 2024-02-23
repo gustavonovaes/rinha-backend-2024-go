@@ -1,2 +1,4 @@
 .go
 api
+tmp/
+__debug*
