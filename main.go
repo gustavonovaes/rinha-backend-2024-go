@@ -15,7 +15,7 @@ var db *sql.DB
 func init() {
 	dbInstance, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
-		log.Fatalf("Err to init DB %v", err)
+		log.Fatalf("Fail to open connection with database: %v", err)
 	}
 
 	dbInstance.SetConnMaxLifetime(0)
@@ -36,6 +36,6 @@ func main() {
 
 	err := http.ListenAndServe(addr, server)
 	if err != nil {
-		log.Fatalf("Fail to start server on addr %q", addr)
+		log.Fatalf("Fail to start server on addr: %q", addr)
 	}
 }

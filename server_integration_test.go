@@ -20,7 +20,7 @@ var db *sql.DB
 func init() {
 	dbInstance, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
-		log.Fatalf("Err to init DB %v", err)
+		log.Fatalf("Fail to open connection with database: %v", err)
 	}
 
 	db = dbInstance
@@ -59,8 +59,8 @@ func TestServerIntegration(t *testing.T) {
 	var clientStatement api.ClientStatement
 	json.NewDecoder(response.Body).Decode(&clientStatement)
 
-	if clientStatement.Balance.Limit != 5000 {
-		t.Errorf("incorrect limit. Got %d, want %d", clientStatement.Balance.Limit, 0)
+	if clientStatement.Balance.AccountLimit != 5000 {
+		t.Errorf("incorrect limit. Got %d, want %d", clientStatement.Balance.AccountLimit, 0)
 	}
 
 	if clientStatement.Balance.Total != 1500 {
@@ -97,7 +97,7 @@ func TestServerIntegration(t *testing.T) {
 	server.ServeHTTP(
 		response,
 		newPostTransactionRequest(clientId, api.Transaction{
-			Amount:      clientStatement.Balance.Limit + clientStatement.Balance.Total + 1,
+			Amount:      clientStatement.Balance.AccountLimit + clientStatement.Balance.Total + 1,
 			Description: "too much",
 			Type:        api.TypeDebit,
 		}),

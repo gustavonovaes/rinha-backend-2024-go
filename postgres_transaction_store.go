@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 )
 
 type PostgresTransactionStore struct {
@@ -11,8 +10,8 @@ type PostgresTransactionStore struct {
 
 func (s *PostgresTransactionStore) Clear() error {
 	query := `
-		DELETE FROM clients;
 		DELETE FROM transactions;
+		DELETE FROM clients;
 	`
 	_, err := s.db.Exec(query)
 	if err != nil {
@@ -97,7 +96,7 @@ func (s *PostgresTransactionStore) AddTransaction(clientId int, transaction Tran
 func (s *PostgresTransactionStore) AddTransactionSync(
 	clientId int,
 	transaction Transaction,
-	processTransaction func(clientBalance *ClientBalance, transaction Transaction) error,
+	processTransaction func(clientBalance ClientBalance, transaction Transaction) (ClientBalance, error),
 ) (ClientBalance, error) {
 	var query string
 
@@ -124,7 +123,7 @@ func (s *PostgresTransactionStore) AddTransactionSync(
 		return clientBalance, err
 	}
 
-	err = processTransaction(&clientBalance, transaction)
+	clientBalanceUpdated, err := processTransaction(clientBalance, transaction)
 	if err != nil {
 		tx.Rollback()
 		return clientBalance, err
@@ -146,7 +145,7 @@ func (s *PostgresTransactionStore) AddTransactionSync(
 	)
 	if err != nil {
 		tx.Rollback()
-		return clientBalance, err
+		return clientBalanceUpdated, err
 	}
 
 	query = `
@@ -154,18 +153,18 @@ func (s *PostgresTransactionStore) AddTransactionSync(
 		set balance = $2
 		where id = $1
 	`
-	_, err = tx.Exec(query, clientId, clientBalance.Balance)
+	_, err = tx.Exec(query, clientId, clientBalanceUpdated.Balance)
 	if err != nil {
 		tx.Rollback()
-		return clientBalance, err
+		return clientBalanceUpdated, err
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		return clientBalance, err
+		return clientBalanceUpdated, err
 	}
 
-	return clientBalance, nil
+	return clientBalanceUpdated, nil
 }
 
 func (s *PostgresTransactionStore) GetTransactions(clientId int, count int) ([]Transaction, error) {
@@ -179,7 +178,7 @@ func (s *PostgresTransactionStore) GetTransactions(clientId int, count int) ([]T
 
 	rows, err := s.db.Query(query, clientId, count)
 	if err != nil {
-		return nil, fmt.Errorf("GetTransactions: %v", err)
+		return nil, err
 	}
 
 	transactions := []Transaction{}

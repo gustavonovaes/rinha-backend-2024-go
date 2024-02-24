@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	contentTypeJSON            = "application/json"
-	MAX_STATEMENT_TRANSCATIONS = 10
+	contentTypeJSON                    = "application/json"
+	MAX_STATEMENT_TRANSCATIONS         = 10
+	MAX_TRANSACTION_DESCRIPTION_LENGTH = 10
 )
 
 var ErrDebitBelowLimit = errors.New("insufficient limit for this debit")
@@ -53,19 +54,21 @@ func (s *Server) postTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 	transaction.TransactionDate = time.Now()
 
-	clientBalance, err := s.transactionStore.AddTransactionSync(
-		clientId,
-		transaction,
-		s.processTransaction,
-	)
+	clientBalance, err := s.addTransaction(clientId, transaction)
 	if err != nil {
-		errorHandler(w, "transactionStore.AddTransactionSync", err)
+		errorHandler(w, "addTransaction", err)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("content-type", contentTypeJSON)
-	json.NewEncoder(w).Encode(&clientBalance)
+	writeResponse(w, http.StatusOK, &clientBalance)
+}
+
+func (s Server) addTransaction(clientId int, transaction Transaction) (ClientBalance, error) {
+	return s.transactionStore.AddTransactionSync(
+		clientId,
+		transaction,
+		processTransaction,
+	)
 }
 
 func (s *Server) getStatement(w http.ResponseWriter, r *http.Request) {
@@ -86,16 +89,17 @@ func (s *Server) getStatement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statement := getStatement(balance, transactions)
+	statement := buildStatement(balance, transactions)
 
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("content-type", contentTypeJSON)
-	json.NewEncoder(w).Encode(&statement)
+	writeResponse(w, http.StatusOK, &statement)
 }
 
-func (s *Server) processTransaction(clientBalance *ClientBalance, transaction Transaction) error {
+func processTransaction(
+	clientBalance ClientBalance,
+	transaction Transaction,
+) (ClientBalance, error) {
 	if !isValidTransaction(transaction) {
-		return ErrInvalidTransaction
+		return clientBalance, ErrInvalidTransaction
 	}
 
 	switch transaction.Type {
@@ -104,13 +108,13 @@ func (s *Server) processTransaction(clientBalance *ClientBalance, transaction Tr
 	case TypeDebit:
 		newBalance := clientBalance.Balance - transaction.Amount
 		if newBalance < -clientBalance.AccountLimit {
-			return ErrDebitBelowLimit
+			return clientBalance, ErrDebitBelowLimit
 		}
 
 		clientBalance.Balance = newBalance
 	}
 
-	return nil
+	return clientBalance, nil
 }
 
 func isValidTransaction(t Transaction) bool {
@@ -122,7 +126,7 @@ func isValidTransaction(t Transaction) bool {
 		return false
 	}
 
-	if len(t.Description) > 10 {
+	if len(t.Description) > MAX_TRANSACTION_DESCRIPTION_LENGTH {
 		return false
 	}
 
@@ -147,11 +151,11 @@ func errorHandler(w http.ResponseWriter, errContext string, err error) {
 	}
 }
 
-func getStatement(balance ClientBalance, transactions []Transaction) *ClientStatement {
-	return &ClientStatement{
+func buildStatement(balance ClientBalance, transactions []Transaction) ClientStatement {
+	return ClientStatement{
 		Balance: ClientStatementBalance{
 			Total:         balance.Balance,
-			Limit:         balance.AccountLimit,
+			AccountLimit:  balance.AccountLimit,
 			StatementDate: time.Now(),
 		},
 		LatestTransactions: transactions,
@@ -165,4 +169,11 @@ func getTransactionFromBody(body io.Reader) (Transaction, error) {
 		return transaction, err
 	}
 	return transaction, nil
+}
+
+func writeResponse[T any](w http.ResponseWriter, statusCode int, data *T) {
+	w.WriteHeader(statusCode)
+	w.Header().Set("content-type", contentTypeJSON)
+
+	json.NewEncoder(w).Encode(&data)
 }

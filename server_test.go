@@ -134,8 +134,8 @@ func TestGETStatement(t *testing.T) {
 		assertStatusCode(t, response.Code, http.StatusOK)
 		assertClientStatement(t, response.Body, api.ClientStatement{
 			Balance: api.ClientStatementBalance{
-				Total: 0,
-				Limit: 1000,
+				Total:        0,
+				AccountLimit: 1000,
 			},
 		})
 	})

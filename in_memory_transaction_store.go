@@ -61,7 +61,7 @@ func (i *InMemoryTractionStore) GetTransactions(clientId, count int) ([]Transact
 func (i *InMemoryTractionStore) AddTransactionSync(
 	clientId int,
 	transaction Transaction,
-	processTransaction func(c *ClientBalance, t Transaction) error,
+	processTransaction func(c ClientBalance, t Transaction) (ClientBalance, error),
 ) (ClientBalance, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -71,17 +71,17 @@ func (i *InMemoryTractionStore) AddTransactionSync(
 		return clientBalance, err
 	}
 
-	err = processTransaction(&clientBalance, transaction)
+	clientBalanceUpdated, err := processTransaction(clientBalance, transaction)
 	if err != nil {
-		return clientBalance, err
+		return clientBalanceUpdated, err
 	}
 
-	err = i.UpdateBalance(clientId, clientBalance)
+	err = i.UpdateBalance(clientId, clientBalanceUpdated)
 	if err != nil {
-		return clientBalance, err
+		return clientBalanceUpdated, err
 	}
 
-	return clientBalance, nil
+	return clientBalanceUpdated, nil
 }
 
 func NewInMemoryTractionStore(clientBalances map[int]ClientBalance) *InMemoryTractionStore {

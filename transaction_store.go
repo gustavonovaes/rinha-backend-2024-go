@@ -1,28 +1,5 @@
 package main
 
-import (
-	"errors"
-	"time"
-)
-
-var ErrClientNotFound = errors.New("client not found")
-
-type ClientBalance struct {
-	AccountLimit int `json:"limite"`
-	Balance      int `json:"saldo"`
-}
-
-type ClientStatement struct {
-	Balance            ClientStatementBalance `json:"saldo"`
-	LatestTransactions []Transaction          `json:"ultimas_transacoes"`
-}
-
-type ClientStatementBalance struct {
-	Total         int       `json:"total"`
-	Limit         int       `json:"limite"`
-	StatementDate time.Time `json:"data_extrato"`
-}
-
 type TransactionStore interface {
 	Clear() error
 	AddClient(clientId int, balance, limit int) error
@@ -32,7 +9,7 @@ type TransactionStore interface {
 	AddTransactionSync(
 		clientId int,
 		transaction Transaction,
-		processTransaction func(c *ClientBalance, t Transaction) error,
+		processTransaction func(c ClientBalance, t Transaction) (ClientBalance, error),
 	) (ClientBalance, error)
 	GetTransactions(clientId, count int) ([]Transaction, error)
 }
