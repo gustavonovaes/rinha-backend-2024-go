@@ -3,6 +3,9 @@ name: Publish to Docker Hub
 on:
   workflow_dispatch:
   push:
+    paths:
+      - '**.go'
+      - '!**_test.go'
     branches:
       - main
 
