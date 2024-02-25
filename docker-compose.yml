@@ -16,7 +16,7 @@ services:
       resources:
         limits:
           cpus: '0.25'
-          memory: 100MB
+          memory: 50MB
 
   api02: 
     <<: *api
@@ -28,16 +28,16 @@ services:
     depends_on:
       - api01
       - api02
-    networks:
-      - default
     ports:
       - 9999:80
     restart: unless-stopped
+    networks:
+      - default
     deploy:
       resources:
         limits:
-          cpus: '0.50'
-          memory: 100MB
+          cpus: '0.25'
+          memory: 50MB
 
   postgres:
     image: docker.io/postgres:16
@@ -51,11 +51,14 @@ services:
       POSTGRES_DB: "rinha"
       POSTGRES_USER: "rinha"
       POSTGRES_PASSWORD: "rinha"
+    restart: unless-stopped
+    networks:
+      - default
     deploy:
       resources:
         limits:
-          cpus: '0.50'
-          memory: 250MB
+          cpus: '0.75'
+          memory: 400MB
 
 networks:
   default:
