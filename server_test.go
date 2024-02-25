@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	api "github.com/gustavonovaes/rinha-backend-2024-go"
 )
@@ -47,7 +48,8 @@ func TestPOSTTransaction(t *testing.T) {
 	})
 
 	t.Run("validation cases", func(t *testing.T) {
-		server, _ := newServer(1, api.ClientBalance{1000, 0})
+		clientId := 1
+		server, _ := newServer(clientId, api.ClientBalance{1000, 0})
 		cases := []struct {
 			CaseName       string
 			ClientId       int
@@ -62,32 +64,32 @@ func TestPOSTTransaction(t *testing.T) {
 			},
 			{
 				"amount float value",
-				1,
+				clientId,
 				`{"valor": 1.2, "tipo": "c", "descricao": "teste"}`,
 				http.StatusUnprocessableEntity,
 			},
 			{
 				"invalid type",
-				1,
+				clientId,
 				`{"valor": 1, "tipo": "x", "descricao": "teste"}`,
 				http.StatusUnprocessableEntity,
 			},
 			{
 				"empty description",
-				1,
+				clientId,
 				`{"valor": 1, "tipo": "c", "descricao": ""}`,
 				http.StatusUnprocessableEntity,
 			},
 			{
 				"big description",
-				1,
+				clientId,
 				`{"valor": 1, "tipo": "c", "descricao": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`,
 				http.StatusUnprocessableEntity,
 			},
 			{
 				"negative value",
-				1,
-				`{"valor": -10, "tipo": "c", "descricao": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`,
+				clientId,
+				`{"valor": -10, "tipo": "c", "descricao": "negative"}`,
 				http.StatusUnprocessableEntity,
 			},
 			{
@@ -124,11 +126,12 @@ func TestGETStatement(t *testing.T) {
 	})
 
 	t.Run("returns 200", func(t *testing.T) {
-		server, response := newServer(1, api.ClientBalance{1000, 0})
+		clientId := 1
+		server, response := newServer(clientId, api.ClientBalance{1000, 0})
 
 		server.ServeHTTP(
 			response,
-			newGetStatementRequest(1),
+			newGetStatementRequest(clientId),
 		)
 
 		assertStatusCode(t, response.Code, http.StatusOK)
@@ -137,7 +140,85 @@ func TestGETStatement(t *testing.T) {
 				Total:        0,
 				AccountLimit: 1000,
 			},
+			LatestTransactions: nil,
 		})
+	})
+
+	t.Run("returns all transaction with the latest first", func(t *testing.T) {
+		clientId := 1
+		server, response := newServer(clientId, api.ClientBalance{1000, 0})
+
+		transactions := []api.Transaction{
+			{42, api.TypeCredit, "Credit", time.Now()},
+			{42, api.TypeDebit, "Debit", time.Now()},
+			{42, api.TypeDebit, "Debit", time.Now()},
+		}
+		for _, t := range transactions {
+			server.ServeHTTP(httptest.NewRecorder(), newPostTransactionRequest(clientId, t))
+		}
+
+		server.ServeHTTP(
+			response,
+			newGetStatementRequest(clientId),
+		)
+
+		assertStatusCode(t, response.Code, http.StatusOK)
+		assertClientStatement(t, response.Body, api.ClientStatement{
+			Balance: api.ClientStatementBalance{
+				Total:        -42,
+				AccountLimit: 1000,
+			},
+			LatestTransactions: []api.Transaction{
+				{42, api.TypeDebit, "Debit", time.Now()},
+				{42, api.TypeDebit, "Debit", time.Now()},
+				{42, api.TypeCredit, "Credit", time.Now()},
+			},
+		})
+	})
+
+	t.Run("returns only max transactions", func(t *testing.T) {
+		clientId := 1
+		server, response := newServer(clientId, api.ClientBalance{1000, 0})
+
+		var total int
+
+		for i := range 100 {
+			amount := 42 * i
+			total += amount
+			server.ServeHTTP(
+				httptest.NewRecorder(),
+				newPostTransactionRequest(clientId, api.Transaction{
+					amount, api.TypeCredit, "Credit", time.Now(),
+				}),
+			)
+		}
+
+		server.ServeHTTP(
+			response,
+			newGetStatementRequest(clientId),
+		)
+
+		assertStatusCode(t, response.Code, http.StatusOK)
+
+		statement := getClientStatementFromResponse(response.Body)
+
+		got := len(statement.LatestTransactions)
+
+		if statement.Balance.Total != total {
+			t.Errorf(
+				"incorrect balance total: got: %d, want: %d",
+				statement.Balance.Total,
+				total,
+			)
+		}
+
+		if got != api.MAX_STATEMENT_TRANSCATIONS {
+			t.Errorf(
+				"incorrect transactions count: got: %d, want: %d",
+				got,
+				api.MAX_STATEMENT_TRANSCATIONS,
+			)
+		}
 	})
 }
 
@@ -178,10 +259,10 @@ func newPostTransactionRequestWithBody(id int, body string) *http.Request {
 	return request
 }
 
-func newGetStatementRequest(id int) *http.Request {
+func newGetStatementRequest(clientId int) *http.Request {
 	request, _ := http.NewRequest(
 		http.MethodGet,
-		fmt.Sprintf("/clientes/%d/extrato", id),
+		fmt.Sprintf("/clientes/%d/extrato", clientId),
 		nil,
 	)
 	return request
@@ -209,7 +290,11 @@ func assertClientStatement(t *testing.T, body io.Reader, want api.ClientStatemen
 
 	got := getClientStatementFromResponse(body)
 
-	got.Balance.StatementDate = want.Balance.StatementDate // fixme
+	// fixme mocking date
+	got.Balance.StatementDate = want.Balance.StatementDate
+	for i, _ := range got.LatestTransactions {
+		got.LatestTransactions[i].TransactionDate = want.LatestTransactions[i].TransactionDate
+	}
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)

@@ -76,6 +76,11 @@ func (i *InMemoryTractionStore) AddTransactionSync(
 		return clientBalanceUpdated, err
 	}
 
+	err = i.AddTransaction(clientId, transaction)
+	if err != nil {
+		return clientBalanceUpdated, err
+	}
+
 	err = i.UpdateBalance(clientId, clientBalanceUpdated)
 	if err != nil {
 		return clientBalanceUpdated, err
